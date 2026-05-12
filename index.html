@@ -3,88 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Workspace</title>
+    <title>React Live Spreadsheet</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .cell-input { @apply w-full bg-transparent border-none outline-none px-4 py-3 text-sm transition-all focus:bg-indigo-50/50 rounded-lg; }
-        
-        /* MOBILE STACKING FIX */
+    <style type="text/tailwindcss">
+        @layer components {
+            .cell-input { @apply w-full bg-transparent border-none outline-none px-4 py-3 text-sm focus:bg-indigo-50/50 rounded-lg transition-all; }
+            .mobile-label { @apply block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 ml-4 md:hidden; }
+        }
         @media (max-width: 640px) {
-            #sheet, #sheet thead, #sheet tbody, #sheet tfoot, #sheet tr, #sheet td { 
-                display: block !important; 
-                width: 100% !important; 
-            }
-            #sheet thead { display: none !important; }
-            
-            /* Each Row becomes a Card */
-            #sheet tbody tr { 
-                @apply mb-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 pb-2 relative; 
-            }
-            
-            /* Each Cell becomes a vertical stack */
-            #sheet td { 
-                @apply flex flex-col mb-4 text-left border-none p-0 !important;
-            }
-            
-            /* Label appears above the input */
-            #sheet td::before {
-                content: attr(data-label);
-                @apply block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 ml-4;
-            }
-
-            .row-delete-btn {
-                @apply absolute top-4 right-4 bg-slate-50 text-slate-400 p-2 rounded-lg !important;
-            }
-
-            #sheet tfoot td {
-                @apply mb-3 bg-indigo-50/50 rounded-xl p-4 flex flex-row justify-between items-center text-indigo-700 font-bold !important;
-            }
-            #sheet tfoot td::before { @apply mb-0; }
+            .responsive-stack { display: block !important; }
+            .responsive-stack thead { display: none; }
+            .responsive-stack tr { @apply block mb-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 relative; }
+            .responsive-stack td { @apply block mb-4 p-0 !important; }
+            .responsive-stack tfoot td { @apply mb-3 bg-indigo-50/50 rounded-xl p-4 flex justify-between items-center text-indigo-700 font-bold !important; }
         }
     </style>
 </head>
-<body class="bg-[#F8FAFC] text-slate-900 min-h-screen p-4 md:p-10">
+<body class="bg-slate-50 min-h-screen">
+    <div id="root"></div>
 
-    <div class="max-w-4xl mx-auto">
-        <div class="flex items-center justify-between mb-8">
-            <div>
-                <h1 class="text-2xl font-black text-slate-800 tracking-tight">Live Workspace</h1>
-                <div id="save-status" class="text-[10px] font-bold uppercase tracking-widest text-indigo-500 flex items-center gap-1.5 mt-1">
-                    <span id="status-dot" class="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span id="status-text">Connected</span>
-                </div>
-            </div>
-            <button onclick="resetAll()" class="text-slate-300 hover:text-red-500 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </button>
-        </div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
 
-        <div class="grid grid-cols-2 gap-3 mb-8">
-            <button onclick="addColumn()" class="bg-white border border-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-all text-center">+ Column</button>
-            <button onclick="addRow()" class="bg-indigo-600 text-white py-3 rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 active:scale-95 transition-all text-center">+ Row</button>
-        </div>
-
-        <div class="md:bg-white md:rounded-3xl md:shadow-xl md:border md:border-slate-200 md:overflow-hidden">
-            <div class="overflow-x-auto">
-                <table id="sheet" class="w-full border-collapse">
-                    <thead class="bg-slate-50 border-b border-slate-100">
-                        <tr id="h-row"></tr>
-                    </thead>
-                    <tbody id="b-rows" class="divide-y divide-slate-100"></tbody>
-                    <tfoot class="md:bg-slate-50 border-t-2 border-slate-100">
-                        <tr id="f-row"></tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <script>
+        // Firebase Setup
         const firebaseConfig = {
             apiKey: "AIzaSyBrh0z8r1ybxlzV0yWUx73lPrmuXfFIdxg",
             authDomain: "generic-speadsheet.firebaseapp.com",
@@ -95,83 +42,170 @@
             measurementId: "G-YRBL3LJVM3"
         };
 
-        firebase.initializeApp(firebaseConfig);
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const DOC_REF = db.collection("data").doc("main_sheet");
 
-        let config = { columns: [], rows: [] };
-        let isInitialLoad = true;
+        function App() {
+            const [columns, setColumns] = useState([]);
+            const [rows, setRows] = useState([]);
+            const [status, setStatus] = useState("Connecting...");
 
-        DOC_REF.onSnapshot((doc) => {
-            if (doc.exists) {
-                const data = doc.data();
-                config.columns = data.columns;
-                config.rows = JSON.parse(data.rowsString);
-                if (isInitialLoad || !doc.metadata.hasPendingWrites) {
-                    render();
-                    isInitialLoad = false;
-                }
-                updateStatus("Connected", "bg-green-500");
-            }
-        });
+            // 1. Real-time Listener (The "React" Magic)
+            useEffect(() => {
+                const unsubscribe = DOC_REF.onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        // Only update state if change came from elsewhere to prevent cursor flickers
+                        if (!doc.metadata.hasPendingWrites) {
+                            setColumns(data.columns || []);
+                            setRows(JSON.parse(data.rowsString || "[]"));
+                        }
+                        setStatus("Live Sync");
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
 
-        async function sync() {
-            updateStatus("Saving...", "bg-yellow-500 animate-pulse");
-            try {
-                await DOC_REF.set({ columns: config.columns, rowsString: JSON.stringify(config.rows) });
-            } catch (e) { updateStatus("Error", "bg-red-500"); }
-        }
+            // 2. Sync function
+            const syncToCloud = (newCols, newRows) => {
+                setStatus("Saving...");
+                DOC_REF.set({
+                    columns: newCols,
+                    rowsString: JSON.stringify(newRows)
+                }).then(() => setStatus("Live Sync"))
+                  .catch(() => setStatus("Error"));
+            };
 
-        function updateStatus(text, colorClass) {
-            document.getElementById('status-text').innerText = text;
-            document.getElementById('status-dot').className = `w-2 h-2 rounded-full ${colorClass}`;
-        }
+            // 3. Actions
+            const addColumn = () => {
+                const nextCols = [...columns, "New Column"];
+                const nextRows = rows.map(r => [...r, ""]);
+                setColumns(nextCols);
+                setRows(nextRows);
+                syncToCloud(nextCols, nextRows);
+            };
 
-        function addColumn() { config.columns.push("New"); config.rows.forEach(r => r.push("")); sync(); render(); }
-        function deleteColumn(i) { config.columns.splice(i, 1); config.rows.forEach(r => r.splice(i, 1)); sync(); render(); }
-        function addRow() { config.rows.push(new Array(config.columns.length).fill("")); sync(); render(); }
-        function deleteRow(i) { config.rows.splice(i, 1); sync(); render(); }
+            const addRow = () => {
+                const nextRows = [...rows, new Array(columns.length).fill("")];
+                setRows(nextRows);
+                syncToCloud(columns, nextRows);
+            };
 
-        function updateHeader(i, v) { config.columns[i] = v; sync(); render(); }
-        function updateCell(r, c, v) { config.rows[r][c] = v; sync(); tallyColumn(c); }
+            const deleteRow = (idx) => {
+                const nextRows = rows.filter((_, i) => i !== idx);
+                setRows(nextRows);
+                syncToCloud(columns, nextRows);
+            };
 
-        function tallyColumn(c) {
-            let total = 0;
-            config.rows.forEach(row => { let v = parseFloat(row[c].toString().replace(/,/g,'')); if(!isNaN(v)) total += v; });
-            const el = document.getElementById(`tally-${c}`);
-            if(el) el.innerText = total === 0 ? '-' : total.toLocaleString();
-        }
+            const deleteColumn = (idx) => {
+                const nextCols = columns.filter((_, i) => i !== idx);
+                const nextRows = rows.map(r => r.filter((_, i) => i !== idx));
+                setColumns(nextCols);
+                setRows(nextRows);
+                syncToCloud(nextCols, nextRows);
+            };
 
-        function render() {
-            const h = document.getElementById('h-row');
-            const b = document.getElementById('b-rows');
-            const f = document.getElementById('f-row');
+            const handleCellChange = (rIdx, cIdx, val) => {
+                const nextRows = [...rows];
+                nextRows[rIdx][cIdx] = val;
+                setRows(nextRows);
+                syncToCloud(columns, nextRows);
+            };
 
-            h.innerHTML = config.columns.map((col, i) => `
-                <th class="group border-r border-slate-50 min-w-[150px]">
-                    <div class="flex items-center px-4 py-3">
-                        <input type="text" class="bg-transparent border-none outline-none font-bold text-[10px] uppercase tracking-widest text-slate-400 w-full" value="${col}" onblur="updateHeader(${i}, this.value)">
-                        <button onclick="deleteColumn(${i})" class="text-slate-300 hover:text-red-500 p-1">×</button>
+            const getTally = (cIdx) => {
+                const total = rows.reduce((sum, row) => {
+                    const val = parseFloat(row[cIdx]?.toString().replace(/,/g, ''));
+                    return !isNaN(val) ? sum + val : sum;
+                }, 0);
+                return total === 0 ? "-" : total.toLocaleString();
+            };
+
+            return (
+                <div className="max-w-4xl mx-auto p-4 md:p-10">
+                    <header className="flex justify-between items-end mb-8">
+                        <div>
+                            <h1 className="text-2xl font-black text-slate-800 tracking-tight">Live Workspace</h1>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className={`w-2 h-2 rounded-full ${status === 'Error' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-500">{status}</span>
+                            </div>
+                        </div>
+                        <button onClick={() => syncToCloud(["Item", "Cost"], [["", ""]])} className="text-slate-300 hover:text-red-500">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </header>
+
+                    <div className="grid grid-cols-2 gap-3 mb-8">
+                        <button onClick={addColumn} className="bg-white border border-slate-200 text-slate-600 py-3 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-all text-center">+ Column</button>
+                        <button onClick={addRow} className="bg-indigo-600 text-white py-3 rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 active:scale-95 transition-all text-center">+ Row</button>
                     </div>
-                </th>
-            `).join('');
 
-            b.innerHTML = config.rows.map((row, rIdx) => `
-                <tr class="group">
-                    ${row.map((cell, cIdx) => `
-                        <td data-label="${config.columns[cIdx]}" class="md:border-r md:border-slate-50 relative">
-                            <input type="text" class="cell-input" value="${cell}" oninput="updateCell(${rIdx}, ${cIdx}, this.value)">
-                            ${cIdx === 0 ? `<button onclick="deleteRow(${rIdx})" class="row-delete-btn md:absolute md:left-2 md:top-1/2 md:-translate-y-1/2 md:opacity-0 md:group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                            </button>` : ''}
-                        </td>
-                    `).join('')}
-                </tr>
-            `).join('');
-
-            f.innerHTML = config.columns.map((col, i) => `<td data-label="Total ${col}" id="tally-${i}" class="text-center py-5 text-sm font-black text-indigo-600 md:border-r md:border-slate-100">-</td>`).join('');
-            config.columns.forEach((_, i) => tallyColumn(i));
+                    <div className="md:bg-white md:rounded-3xl md:shadow-xl md:border md:border-slate-200 md:overflow-hidden">
+                        <table className="w-full border-collapse responsive-stack">
+                            <thead className="bg-slate-50 border-b border-slate-100">
+                                <tr>
+                                    {columns.map((col, i) => (
+                                        <th key={i} className="group border-r border-slate-50 min-w-[150px]">
+                                            <div className="flex items-center px-4 py-3">
+                                                <input 
+                                                    className="bg-transparent border-none outline-none font-bold text-[10px] uppercase tracking-widest text-slate-400 w-full"
+                                                    value={col}
+                                                    onChange={(e) => {
+                                                        const next = [...columns];
+                                                        next[i] = e.target.value;
+                                                        setColumns(next);
+                                                        syncToCloud(next, rows);
+                                                    }}
+                                                />
+                                                <button onClick={() => deleteColumn(i)} className="text-slate-200 hover:text-red-500 ml-1">×</button>
+                                            </div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {rows.map((row, rIdx) => (
+                                    <tr key={rIdx} className="group relative">
+                                        {row.map((cell, cIdx) => (
+                                            <td key={cIdx} className="md:border-r md:border-slate-50 relative" data-label={columns[cIdx]}>
+                                                <span className="mobile-label">{columns[cIdx]}</span>
+                                                <input 
+                                                    className="cell-input"
+                                                    value={cell}
+                                                    onChange={(e) => handleCellChange(rIdx, cIdx, e.target.value)}
+                                                />
+                                                {cIdx === 0 && (
+                                                    <button 
+                                                        onClick={() => deleteRow(rIdx)}
+                                                        className="absolute top-4 right-4 md:left-2 md:top-1/2 md:-translate-y-1/2 md:opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                    </button>
+                                                )}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot className="md:bg-slate-50 border-t-2 border-slate-100">
+                                <tr>
+                                    {columns.map((_, i) => (
+                                        <td key={i} className="text-center py-5 text-sm font-black text-indigo-600 md:border-r md:border-slate-100">
+                                            <span className="mobile-label">Total {_}</span>
+                                            {getTally(i)}
+                                        </td>
+                                    ))}
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            );
         }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
